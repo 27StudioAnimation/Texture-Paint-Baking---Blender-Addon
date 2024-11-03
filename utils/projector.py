@@ -22,26 +22,40 @@ class TextureProjector:
         self.optimize_render_settings()
 
     def optimize_render_settings(self):
-        """Apply optimized render settings for faster performance"""
+        """Apply optimized render settings based on quality preset"""
         scene = bpy.context.scene
-        
-        # Optimize EEVEE settings
-        scene.eevee.taa_render_samples = 8  # Reduced from 16
+        props = bpy.context.scene.eevee_baker
+        preferences = bpy.context.preferences.addons["Texture Paint Bake"].preferences
+
+        # Base settings that are always applied
         scene.eevee.use_taa_reprojection = True
-        scene.eevee.use_ssr = False  # Disable screen space reflections
-        scene.eevee.use_ssr_refraction = False
-        scene.eevee.use_gtao = False  # Disable ambient occlusion
-        scene.eevee.use_bloom = False  # Disable bloom
         scene.eevee.use_motion_blur = False
-        scene.eevee.shadow_cube_size = '512'  # Reduce shadow quality
-        scene.eevee.shadow_cascade_size = '512'
         
-        # Optimize viewport settings
-        for area in bpy.context.screen.areas:
-            if area.type == 'VIEW_3D':
-                space = area.spaces[0]
-                space.shading.show_shadows = False
-                space.overlay.show_overlays = False
+        # Apply quality-specific settings
+        if props.quality_preset == 'FAST':
+            scene.eevee.taa_render_samples = preferences.fast_taa_samples
+            scene.eevee.shadow_cube_size = preferences.fast_shadow_size
+            scene.eevee.shadow_cascade_size = preferences.fast_shadow_size
+            scene.eevee.use_ssr = False
+            scene.eevee.use_ssr_refraction = False
+            scene.eevee.use_gtao = False
+            scene.eevee.use_bloom = False
+        elif props.quality_preset == 'BALANCED':
+            scene.eevee.taa_render_samples = preferences.balanced_taa_samples
+            scene.eevee.shadow_cube_size = preferences.balanced_shadow_size
+            scene.eevee.shadow_cascade_size = preferences.balanced_shadow_size
+            scene.eevee.use_ssr = True
+            scene.eevee.use_ssr_refraction = True
+            scene.eevee.use_gtao = True
+            scene.eevee.use_bloom = False
+        else:  # HIGH
+            scene.eevee.taa_render_samples = preferences.high_taa_samples
+            scene.eevee.shadow_cube_size = preferences.high_shadow_size
+            scene.eevee.shadow_cascade_size = preferences.high_shadow_size
+            scene.eevee.use_ssr = True
+            scene.eevee.use_ssr_refraction = True
+            scene.eevee.use_gtao = True
+            scene.eevee.use_bloom = True
 
     def _setup_directories(self):
         """Creates output and temp directories with error handling"""

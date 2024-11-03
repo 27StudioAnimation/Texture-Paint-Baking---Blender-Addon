@@ -1,6 +1,7 @@
 import bpy
 from bpy.types import (Operator)
 from ..utils import (ProjectionSettings,TextureProjector)
+
 class EEVEE_OT_TextureBaker(bpy.types.Operator):
     bl_idname = "object.eevee_texture_baker"
     bl_label = "Bake Texture"
@@ -22,8 +23,20 @@ class EEVEE_OT_TextureBaker(bpy.types.Operator):
         
         if event.type == 'TIMER':
             if not props.auto_bake:
-                # Single shot mode
-                self.projector.project_texture(0, 1, 1)
+                # Single shot mode - use current view
+                view3d = context.space_data
+                if view3d and view3d.type == 'VIEW_3D':
+                    # Get the view matrix
+                    view_matrix = view3d.region_3d.view_matrix
+                    # Apply the current view to the camera
+                    self.projector.camera.matrix_world = view_matrix.inverted()
+                    self.projector.setup_viewport()
+                    self.projector.project_texture("current_view", 1, 1)
+                else:
+                    self.report({'ERROR'}, "No 3D view found")
+                    self.cleanup(context)
+                    return {'CANCELLED'}
+                
                 self.cleanup(context)
                 return {'FINISHED'}
             
@@ -31,7 +44,7 @@ class EEVEE_OT_TextureBaker(bpy.types.Operator):
                 self.cleanup(context)
                 return {'FINISHED'}
             
-            # Process next angle
+            # Process next angle for auto-bake
             view_type, h_angle = self._camera_angles[self._current_angle_index]
             self.projector.position_camera(h_angle, view_type)
             self.projector.setup_viewport()
@@ -73,8 +86,7 @@ class EEVEE_OT_TextureBaker(bpy.types.Operator):
                 scene.eevee.taa_render_samples = preferences.high_taa_samples
                 scene.eevee.shadow_cube_size = preferences.high_shadow_size
                 scene.eevee.shadow_cascade_size = preferences.high_shadow_size
-                scene.eevee.taa_render_samples = 32
-                scene.eevee.shadow_cube_size = '1024'
+
             settings = ProjectionSettings(
                 resolution=props.resolution,
                 image_name=props.file_name,
@@ -92,24 +104,19 @@ class EEVEE_OT_TextureBaker(bpy.types.Operator):
             if props.auto_bake:
                 self._camera_angles = self.projector.generate_camera_angles()
                 props.total_steps = len(self._camera_angles)
-                wm = context.window_manager
-                self._timer = wm.event_timer_add(0.1, window=context.window)
-                wm.modal_handler_add(self)
-                return {'RUNNING_MODAL'}
             else:
-                # Single shot mode
-                self._camera_angles = [(None, 0)]
+                # Single shot mode - we'll use the current view position in modal
                 props.total_steps = 1
-                wm = context.window_manager
-                self._timer = wm.event_timer_add(0.1, window=context.window)
-                wm.modal_handler_add(self)
+            
+            wm = context.window_manager
+            self._timer = wm.event_timer_add(0.1, window=context.window)
+            wm.modal_handler_add(self)
+            
         except Exception as e:
             self.cleanup(context)  # Ensure cleanup happens
             self.report({'ERROR'}, str(e))
             return {'CANCELLED'}
         return {'RUNNING_MODAL'}
-        
-
     
     def cleanup(self, context):
         props = context.scene.eevee_baker
